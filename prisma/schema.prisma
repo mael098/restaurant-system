@@ -1,0 +1,232 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// Modelo para usuarios del sistema (meseros y administradores)
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?  @unique
+  password  String?  // Para administradores
+  role      UserRole @default(WAITER)
+  status    UserStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  orders    Order[]
+  sessions  UserSession[]
+
+  @@map("users")
+}
+
+// Modelo para sesiones de usuario
+model UserSession {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  loginTime DateTime @default(now())
+  logoutTime DateTime?
+  isActive  Boolean  @default(true)
+
+  // Relaciones
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_sessions")
+}
+
+// Modelo para categorías de productos
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relaciones
+  menuItems   MenuItem[]
+
+  @@map("categories")
+}
+
+// Modelo para items del menú
+model MenuItem {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Float
+  categoryId  String
+  isAvailable Boolean  @default(true)
+  image       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relaciones
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  orderItems  OrderItem[]
+
+  @@map("menu_items")
+}
+
+// Modelo para mesas
+model Table {
+  id        String   @id @default(cuid())
+  number    String   @unique
+  capacity  Int
+  status    TableStatus @default(AVAILABLE)
+  location  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  orders    Order[]
+
+  @@map("tables")
+}
+
+// Modelo para órdenes
+model Order {
+  id        String      @id @default(cuid())
+  tableId   String
+  waiterId  String
+  status    OrderStatus @default(PENDING)
+  total     Float       @default(0)
+  subtotal  Float       @default(0)
+  tax       Float       @default(0)
+  tip       Float       @default(0)
+  notes     String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  completedAt DateTime?
+
+  // Relaciones
+  table     Table       @relation(fields: [tableId], references: [id])
+  waiter    User        @relation(fields: [waiterId], references: [id])
+  items     OrderItem[]
+  payment   Payment?
+
+  @@map("orders")
+}
+
+// Modelo para items de una orden
+model OrderItem {
+  id         String   @id @default(cuid())
+  orderId    String
+  menuItemId String
+  quantity   Int
+  unitPrice  Float
+  totalPrice Float
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  // Relaciones
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@map("order_items")
+}
+
+// Modelo para pagos
+model Payment {
+  id            String        @id @default(cuid())
+  orderId       String        @unique
+  method        PaymentMethod
+  amount        Float
+  status        PaymentStatus @default(PENDING)
+  transactionId String?
+  processedAt   DateTime?
+  createdAt     DateTime      @default(now())
+
+  // Relaciones
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+// Modelo para inventario
+model Inventory {
+  id            String   @id @default(cuid())
+  itemName      String
+  currentStock  Float
+  minStock      Float
+  maxStock      Float?
+  unit          String   // kg, pz, l, etc.
+  cost          Float?
+  supplier      String?
+  lastRestocked DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("inventory")
+}
+
+// Modelo para reportes de ventas
+model SalesReport {
+  id          String   @id @default(cuid())
+  date        DateTime @unique
+  totalSales  Float
+  totalOrders Int
+  totalTips   Float
+  avgTicket   Float
+  createdAt   DateTime @default(now())
+
+  @@map("sales_reports")
+}
+
+// Enums
+enum UserRole {
+  ADMIN
+  WAITER
+  KITCHEN
+  CASHIER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum TableStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+  OUT_OF_SERVICE
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  SERVED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
