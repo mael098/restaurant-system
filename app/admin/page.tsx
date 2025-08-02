@@ -19,6 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { getAuthSession, clearAuthSession } from "@/lib/auth/cookies"
 
 interface Mesero {
   id: number
@@ -53,19 +54,15 @@ export default function AdminPage() {
   const router = useRouter()
 
   useEffect(() => {
-    // Verificar autenticación
-    const session = localStorage.getItem("userSession")
+    // Verificar autenticación desde cookies
+    const session = getAuthSession()
     if (!session) {
       router.push("/")
       return
     }
 
-    const userData = JSON.parse(session)
-    if (userData.type !== "admin") {
-      router.push("/")
-      return
-    }
-
+    // El middleware ya se encarga de verificar el rol
+    
     // Cargar datos desde la API
     loadData()
   }, [router])
@@ -117,15 +114,14 @@ export default function AdminPage() {
   const handleLogout = async () => {
     try {
       // Obtener la sesión del usuario para enviar el token
-      const session = localStorage.getItem("userSession")
+      const session = getAuthSession()
       if (session) {
-        const userSession = JSON.parse(session)
         await fetch('/api/auth/logout', { 
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ token: userSession.token }),
+          body: JSON.stringify({ token: session.token }),
         })
       } else {
         // Si no hay sesión, solo llamar al endpoint sin token
@@ -134,7 +130,8 @@ export default function AdminPage() {
     } catch (error) {
       console.error('Error logging out:', error)
     }
-    localStorage.removeItem("userSession")
+    // Limpiar cookies
+    clearAuthSession()
     router.push("/")
   }
 

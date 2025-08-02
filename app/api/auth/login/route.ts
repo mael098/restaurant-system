@@ -1,24 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { findWaiterByName, authenticateUser } from '@/lib/db/users'
-import bcrypt from 'bcryptjs'
 
 export async function POST(request: NextRequest) {
   try {
     const { type, name, email, password } = await request.json()
+    
+    console.log('Login attempt:', { type, name, email })
 
     if (type === 'waiter') {
       // Autenticación de mesero por nombre
       if (!name) {
+        console.log('Error: Nombre requerido')
         return NextResponse.json(
           { error: 'El nombre es requerido' },
           { status: 400 }
         )
       }
 
+      console.log('Searching for waiter:', name.trim())
       const waiter = await findWaiterByName(name)
       
+      console.log('Waiter found:', waiter)
+      
       if (!waiter) {
+        console.log('Error: Mesero no encontrado')
         return NextResponse.json(
           { error: 'Mesero no encontrado o inactivo' },
           { status: 401 }
@@ -33,15 +39,36 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      return NextResponse.json({
+      // Crear respuesta con cookies
+      const response = NextResponse.json({
         success: true,
+        token: session.token,
         user: {
           id: waiter.id,
           name: waiter.name,
           role: waiter.role,
         },
-        token: session.token,
+        redirectTo: '/mesero'
       })
+
+      // Establecer cookies manualmente para evitar URL-encoding
+      const userDataString = JSON.stringify({
+        id: waiter.id,
+        name: waiter.name,
+        role: waiter.role,
+      })
+      
+      response.cookies.set('auth-token', session.token, {
+        path: '/',
+        maxAge: 60 * 60 * 24 * 7, // 7 días
+      })
+      
+      response.cookies.set('user-data', userDataString, {
+        path: '/',
+        maxAge: 60 * 60 * 24 * 7, // 7 días
+      })
+
+      return response
     }
 
     if (type === 'admin') {
@@ -70,16 +97,36 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      return NextResponse.json({
+      // Crear respuesta con cookies
+      const response = NextResponse.json({
         success: true,
+        token: session.token,
         user: {
           id: admin.id,
           name: admin.name,
-          email: admin.email,
           role: admin.role,
         },
-        token: session.token,
+        redirectTo: '/admin'
       })
+
+      // Establecer cookies manualmente para evitar URL-encoding
+      const userDataString = JSON.stringify({
+        id: admin.id,
+        name: admin.name,
+        role: admin.role,
+      })
+      
+      response.cookies.set('auth-token', session.token, {
+        path: '/',
+        maxAge: 60 * 60 * 24 * 7, // 7 días
+      })
+      
+      response.cookies.set('user-data', userDataString, {
+        path: '/',
+        maxAge: 60 * 60 * 24 * 7, // 7 días
+      })
+
+      return response
     }
 
     return NextResponse.json(

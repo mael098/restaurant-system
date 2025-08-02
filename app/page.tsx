@@ -47,18 +47,9 @@ export default function LoginPage() {
         return
       }
 
-      // Guardar sesión
-      localStorage.setItem(
-        "userSession",
-        JSON.stringify({
-          type: "mesero",
-          user: data.user,
-          token: data.token,
-          loginTime: new Date().toISOString(),
-        }),
-      )
-
-      router.push("/mesero")
+      // Las cookies ya se establecen en el servidor
+      // Redirigir directamente a la ruta del mesero
+      window.location.href = "/mesero"
     } catch (error) {
       console.error('Error en login:', error)
       alert('Error de conexión')
@@ -95,18 +86,9 @@ export default function LoginPage() {
         return
       }
 
-      // Guardar sesión
-      localStorage.setItem(
-        "userSession",
-        JSON.stringify({
-          type: "admin",
-          user: data.user,
-          token: data.token,
-          loginTime: new Date().toISOString(),
-        }),
-      )
-
-      router.push("/admin")
+      // Las cookies ya se establecen en el servidor
+      // Redirigir directamente a la ruta del admin
+      window.location.href = "/admin"
     } catch (error) {
       console.error('Error en login:', error)
       alert('Error de conexión')

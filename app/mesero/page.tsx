@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { getAuthSession, clearAuthSession } from "@/lib/auth/cookies"
 
 interface Order {
   id: string
@@ -66,12 +67,12 @@ interface OrderItem {
 }
 
 interface UserSession {
-  type: string
+  token: string
   user: {
     id: string
     name: string
+    role: string
   }
-  token: string
 }
 
 export default function MeseroPage() {
@@ -93,20 +94,15 @@ export default function MeseroPage() {
   const categories = ["Todos", ...Array.from(new Set(menuItems.map((item) => item.category.name)))]
 
   useEffect(() => {
-    // Verificar autenticación
-    const session = localStorage.getItem("userSession")
+    // Verificar autenticación desde cookies
+    const session = getAuthSession()
     if (!session) {
       router.push("/")
       return
     }
 
-    const userData = JSON.parse(session)
-    if (userData.type !== "mesero") {
-      router.push("/")
-      return
-    }
-
-    setUserSession(userData)
+    // El middleware ya se encarga de verificar el rol
+    setUserSession(session)
     loadData()
   }, [router])
 
@@ -172,7 +168,8 @@ export default function MeseroPage() {
       }
     }
 
-    localStorage.removeItem("userSession")
+    // Limpiar cookies
+    clearAuthSession()
     router.push("/")
   }
 
