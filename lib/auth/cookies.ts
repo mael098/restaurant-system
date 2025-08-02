@@ -52,10 +52,13 @@ export function getAuthSession(): AuthSession | null {
   if (!token || !userData) return null
   
   try {
-    const user = JSON.parse(userData)
+    // Decodificar URL antes de parsear JSON
+    const decodedUserData = decodeURIComponent(userData)
+    const user = JSON.parse(decodedUserData)
     return { token, user }
   } catch (error) {
     console.error('Error parsing user data:', error)
+    console.error('Raw userData:', userData)
     return null
   }
 }

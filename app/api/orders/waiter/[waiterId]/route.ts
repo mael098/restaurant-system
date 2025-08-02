@@ -3,7 +3,7 @@ import { getOrdersByWaiter } from '@/lib/db/orders'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { waiterId: string } }
+  { params }: { params: Promise<{ waiterId: string }> }
 ) {
   try {
     const { waiterId } = await params
