@@ -10,8 +10,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // Modelo para usuarios del sistema (meseros y administradores)
@@ -67,7 +68,7 @@ model MenuItem {
   id          String   @id @default(cuid())
   name        String
   description String?
-  price       Float
+  price       Decimal  @db.Decimal(10, 2)
   categoryId  String
   isAvailable Boolean  @default(true)
   image       String?
@@ -103,10 +104,10 @@ model Order {
   tableId   String
   waiterId  String
   status    OrderStatus @default(PENDING)
-  total     Float       @default(0)
-  subtotal  Float       @default(0)
-  tax       Float       @default(0)
-  tip       Float       @default(0)
+  total     Decimal     @default(0) @db.Decimal(10, 2)
+  subtotal  Decimal     @default(0) @db.Decimal(10, 2)
+  tax       Decimal     @default(0) @db.Decimal(10, 2)
+  tip       Decimal     @default(0) @db.Decimal(10, 2)
   notes     String?
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
@@ -127,8 +128,8 @@ model OrderItem {
   orderId    String
   menuItemId String
   quantity   Int
-  unitPrice  Float
-  totalPrice Float
+  unitPrice  Decimal  @db.Decimal(10, 2)
+  totalPrice Decimal  @db.Decimal(10, 2)
   notes      String?
   createdAt  DateTime @default(now())
 
@@ -144,7 +145,7 @@ model Payment {
   id            String        @id @default(cuid())
   orderId       String        @unique
   method        PaymentMethod
-  amount        Float
+  amount        Decimal       @db.Decimal(10, 2)
   status        PaymentStatus @default(PENDING)
   transactionId String?
   processedAt   DateTime?
@@ -160,11 +161,11 @@ model Payment {
 model Inventory {
   id            String   @id @default(cuid())
   itemName      String
-  currentStock  Float
-  minStock      Float
-  maxStock      Float?
+  currentStock  Decimal  @db.Decimal(10, 3)
+  minStock      Decimal  @db.Decimal(10, 3)
+  maxStock      Decimal? @db.Decimal(10, 3)
   unit          String   // kg, pz, l, etc.
-  cost          Float?
+  cost          Decimal? @db.Decimal(10, 2)
   supplier      String?
   lastRestocked DateTime?
   createdAt     DateTime @default(now())
@@ -177,10 +178,10 @@ model Inventory {
 model SalesReport {
   id          String   @id @default(cuid())
   date        DateTime @unique
-  totalSales  Float
+  totalSales  Decimal  @db.Decimal(10, 2)
   totalOrders Int
-  totalTips   Float
-  avgTicket   Float
+  totalTips   Decimal  @db.Decimal(10, 2)
+  avgTicket   Decimal  @db.Decimal(10, 2)
   createdAt   DateTime @default(now())
 
   @@map("sales_reports")
