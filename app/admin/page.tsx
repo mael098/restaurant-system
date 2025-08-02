@@ -90,15 +90,15 @@ export default function AdminPage() {
         const ordersData = await ordersResponse.json()
         const formattedOrders = ordersData.map((order: any) => ({
           id: order.id,
-          tableNumber: order.tableNumber,
+          tableNumber: order.table?.number || order.tableNumber,
           waiterName: order.waiter.name,
           items: order.items.map((item: any) => ({
             id: item.id,
             name: item.menuItem.name,
-            price: item.menuItem.price,
+            price: Number(item.unitPrice || item.menuItem.price),
             quantity: item.quantity
           })),
-          total: order.total,
+          total: Number(order.total),
           createdAt: new Date(order.createdAt).toLocaleString(),
           status: order.status
         }))
@@ -214,7 +214,7 @@ export default function AdminPage() {
   }
 
   const getTotalSales = () => {
-    return orders.reduce((total, order) => total + order.total, 0)
+    return orders.reduce((total, order) => total + Number(order.total), 0)
   }
 
   const getOrdersByMesero = (meseroName: string) => {
@@ -384,7 +384,9 @@ export default function AdminPage() {
                           <TableCell>
                             <Badge variant="outline">{order.items.length} items</Badge>
                           </TableCell>
-                          <TableCell className="font-semibold text-green-600">${order.total}</TableCell>
+                          <TableCell className="font-semibold text-green-600">
+                            ${Number(order.total).toLocaleString('es-MX')}
+                          </TableCell>
                           <TableCell className="text-sm">{order.createdAt}</TableCell>
                           <TableCell>
                             <Dialog>
@@ -410,7 +412,7 @@ export default function AdminPage() {
                                             <span>
                                               {item.name} x{item.quantity}
                                             </span>
-                                            <span>${item.price * item.quantity}</span>
+                                            <span>${(Number(item.price) * item.quantity).toLocaleString('es-MX')}</span>
                                           </div>
                                         ))}
                                       </div>
@@ -418,7 +420,9 @@ export default function AdminPage() {
                                     <div className="border-t pt-2">
                                       <div className="flex justify-between font-semibold text-lg">
                                         <span>Total:</span>
-                                        <span className="text-green-600">${selectedOrder.total}</span>
+                                        <span className="text-green-600">
+                                          ${Number(selectedOrder.total).toLocaleString('es-MX')}
+                                        </span>
                                       </div>
                                     </div>
                                     <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
@@ -457,7 +461,9 @@ export default function AdminPage() {
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-green-600">${getTotalSales()}</div>
+                  <div className="text-2xl font-bold text-green-600">
+                    ${getTotalSales().toLocaleString('es-MX')}
+                  </div>
                   <p className="text-xs text-muted-foreground">{orders.length} pedidos procesados</p>
                 </CardContent>
               </Card>
@@ -480,7 +486,7 @@ export default function AdminPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    ${orders.length > 0 ? Math.round(getTotalSales() / orders.length) : 0}
+                    ${orders.length > 0 ? Math.round(getTotalSales() / orders.length).toLocaleString('es-MX') : 0}
                   </div>
                   <p className="text-xs text-muted-foreground">por pedido</p>
                 </CardContent>
@@ -512,7 +518,7 @@ export default function AdminPage() {
                     <TableBody>
                       {meseros.map((mesero) => {
                         const meseroOrders = getOrdersByMesero(mesero.name)
-                        const totalSales = meseroOrders.reduce((sum, order) => sum + order.total, 0)
+                        const totalSales = meseroOrders.reduce((sum, order) => sum + Number(order.total), 0)
                         const avgSale = meseroOrders.length > 0 ? Math.round(totalSales / meseroOrders.length) : 0
 
                         return (
@@ -524,8 +530,12 @@ export default function AdminPage() {
                               </Badge>
                             </TableCell>
                             <TableCell>{meseroOrders.length}</TableCell>
-                            <TableCell className="font-semibold">${totalSales}</TableCell>
-                            <TableCell>${avgSale}</TableCell>
+                            <TableCell className="font-semibold">
+                              ${totalSales.toLocaleString('es-MX')}
+                            </TableCell>
+                            <TableCell>
+                              ${avgSale.toLocaleString('es-MX')}
+                            </TableCell>
                           </TableRow>
                         )
                       })}

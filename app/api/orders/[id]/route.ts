@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getOrderById, updateOrder } from '@/lib/db/orders'
+import { prisma } from '@/lib/db/prisma'
 
 export async function GET(
   request: NextRequest,
@@ -34,11 +35,46 @@ export async function PATCH(
   try {
     const { id } = await params
     const body = await request.json()
-    const { items } = body
+    const { items, status } = body
 
+    // Si se está actualizando el estado
+    if (status) {
+      const updatedOrder = await prisma.order.update({
+        where: { id },
+        data: { 
+          status,
+          ...(status === 'COMPLETED' && { completedAt: new Date() })
+        },
+        include: {
+          table: true,
+          waiter: true,
+          items: {
+            include: {
+              menuItem: {
+                include: {
+                  category: true
+                }
+              }
+            }
+          }
+        }
+      })
+
+      // Si el pedido se completó, liberar la mesa
+      if (status === 'SERVED' || status === 'COMPLETED') {
+        await prisma.table.update({
+          where: { id: updatedOrder.tableId },
+          data: { status: 'AVAILABLE' }
+        })
+      }
+
+      return NextResponse.json(updatedOrder)
+    }
+
+    // Si se están actualizando items (código existente)
     if (!items || !Array.isArray(items)) {
       return NextResponse.json(
-        { error: 'Items array is required' },
+        { error: 'Items array is required for item updates' },
         { status: 400 }
       )
     }

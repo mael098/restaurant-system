@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Minus, LogOut, Calculator, Search, History, ShoppingCart, Edit } from "lucide-react"
+import { Plus, Minus, LogOut, Calculator, Search, History, ShoppingCart, Edit, Clock, Check, CheckCircle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -317,6 +317,82 @@ export default function MeseroPage() {
     setSelectedTable("")
   }
 
+  const updateOrderStatus = async (orderId: string, newStatus: string) => {
+    try {
+      const response = await fetch(`/api/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: newStatus }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Error al actualizar estado')
+      }
+
+      // Recargar pedidos para ver el cambio
+      loadMyOrders()
+      
+      // Si se completó el pedido, también recargar las mesas para que se liberen
+      if (newStatus === 'COMPLETED') {
+        loadData()
+        alert('¡Pedido completado! La mesa ha sido liberada.')
+      } else {
+        alert(`Estado del pedido actualizado a: ${getStatusText(newStatus)}`)
+      }
+    } catch (error) {
+      console.error('Error actualizando estado:', error)
+      alert('Error al actualizar el estado del pedido')
+    }
+  }
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'PENDING': return 'Pendiente'
+      case 'PREPARING': return 'Preparando'
+      case 'READY': return 'Listo'
+      case 'SERVED': return 'Servido'
+      case 'COMPLETED': return 'Completado'
+      default: return status
+    }
+  }
+
+  const getNextStatus = (currentStatus: string) => {
+    switch (currentStatus) {
+      case 'PENDING': return 'PREPARING'
+      case 'PREPARING': return 'READY'
+      case 'READY': return 'SERVED'
+      case 'SERVED': return 'COMPLETED'
+      default: return null
+    }
+  }
+
+  const getStatusButtonText = (currentStatus: string) => {
+    const nextStatus = getNextStatus(currentStatus)
+    if (!nextStatus) return null
+    
+    switch (nextStatus) {
+      case 'PREPARING': return 'Preparando'
+      case 'READY': return 'Listo'
+      case 'SERVED': return 'Servido'
+      case 'COMPLETED': return 'Completar'
+      default: return getStatusText(nextStatus)
+    }
+  }
+
+  const getStatusIcon = (currentStatus: string) => {
+    const nextStatus = getNextStatus(currentStatus)
+    switch (nextStatus) {
+      case 'PREPARING': return <Clock className="h-3 w-3" />
+      case 'READY': return <Check className="h-3 w-3" />
+      case 'SERVED': return <CheckCircle className="h-3 w-3" />
+      case 'COMPLETED': return <CheckCircle className="h-3 w-3" />
+      default: return null
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -629,7 +705,7 @@ export default function MeseroPage() {
                                   {order.status === 'PENDING' ? 'Pendiente' :
                                     order.status === 'PREPARING' ? 'Preparando' :
                                       order.status === 'READY' ? 'Listo' :
-                                        order.status === 'DELIVERED' ? 'Entregado' :
+                                        order.status === 'SERVED' ? 'Servido' :
                                           'Completado'}
                                 </Badge>
                               </div>
@@ -645,17 +721,31 @@ export default function MeseroPage() {
                             </div>
                             <div className="text-right">
                               <p className="text-lg font-semibold text-green-600">${order.total}</p>
-                              {order.status === 'PENDING' && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => startEditingOrder(order)}
-                                  className="mt-1"
-                                >
-                                  <Edit className="h-3 w-3 mr-1" />
-                                  Agregar Items
-                                </Button>
-                              )}
+                              <div className="flex flex-col gap-1 mt-1">
+                                {order.status === 'PENDING' && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => startEditingOrder(order)}
+                                  >
+                                    <Edit className="h-3 w-3 mr-1" />
+                                    Agregar Items
+                                  </Button>
+                                )}
+                                {getNextStatus(order.status) && (
+                                  <Button
+                                    size="sm"
+                                    variant={getNextStatus(order.status) === 'COMPLETED' ? 'default' : 'outline'}
+                                    onClick={() => updateOrderStatus(order.id, getNextStatus(order.status)!)}
+                                    className={getNextStatus(order.status) === 'COMPLETED' ? 'bg-green-600 hover:bg-green-700 text-white' : ''}
+                                  >
+                                    {getStatusIcon(order.status)}
+                                    <span className="ml-1">
+                                      {getStatusButtonText(order.status)}
+                                    </span>
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                           </div>
 
