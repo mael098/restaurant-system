@@ -51,22 +51,13 @@ export async function POST(request: NextRequest) {
         redirectTo: '/mesero'
       })
 
-      // Establecer cookies manualmente para evitar URL-encoding
-      const userDataString = JSON.stringify({
+      // Establecer cookies para debugging (configuración minimal)
+      response.cookies.set('auth-token', session.token)
+      response.cookies.set('user-data', JSON.stringify({
         id: waiter.id,
         name: waiter.name,
         role: waiter.role,
-      })
-      
-      response.cookies.set('auth-token', session.token, {
-        path: '/',
-        maxAge: 60 * 60 * 24 * 7, // 7 días
-      })
-      
-      response.cookies.set('user-data', userDataString, {
-        path: '/',
-        maxAge: 60 * 60 * 24 * 7, // 7 días
-      })
+      }))
 
       return response
     }
@@ -109,22 +100,13 @@ export async function POST(request: NextRequest) {
         redirectTo: '/admin'
       })
 
-      // Establecer cookies manualmente para evitar URL-encoding
-      const userDataString = JSON.stringify({
+      // Establecer cookies para debugging (configuración minimal)
+      response.cookies.set('auth-token', session.token)
+      response.cookies.set('user-data', JSON.stringify({
         id: admin.id,
         name: admin.name,
         role: admin.role,
-      })
-      
-      response.cookies.set('auth-token', session.token, {
-        path: '/',
-        maxAge: 60 * 60 * 24 * 7, // 7 días
-      })
-      
-      response.cookies.set('user-data', userDataString, {
-        path: '/',
-        maxAge: 60 * 60 * 24 * 7, // 7 días
-      })
+      }))
 
       return response
     }
