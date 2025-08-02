@@ -522,28 +522,59 @@ export default function MeseroPage() {
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {filteredItems.map((item) => (
-                          <Card key={item.id} className="hover:shadow-md transition-shadow">
-                            <CardContent className="p-4">
-                              <div className="flex justify-between items-start mb-2">
-                                <div>
-                                  <h3 className="font-semibold">{item.name}</h3>
-                                  <p className="text-sm text-gray-600">{item.category.name}</p>
-                                  {item.description && (
-                                    <p className="text-xs text-gray-500 mt-1">{item.description}</p>
-                                  )}
+                        {filteredItems.map((item) => {
+                          const orderItem = orderItems.find(orderItem => orderItem.menuItemId === item.id)
+                          const quantity = orderItem ? orderItem.quantity : 0
+                          
+                          return (
+                            <Card key={item.id} className="hover:shadow-md transition-shadow">
+                              <CardContent className="p-4">
+                                <div className="flex justify-between items-start mb-2">
+                                  <div>
+                                    <h3 className="font-semibold">{item.name}</h3>
+                                    <p className="text-sm text-gray-600">{item.category.name}</p>
+                                    {item.description && (
+                                      <p className="text-xs text-gray-500 mt-1">{item.description}</p>
+                                    )}
+                                  </div>
+                                  <Badge variant="secondary" className="text-lg font-semibold">
+                                    ${item.price}
+                                  </Badge>
                                 </div>
-                                <Badge variant="secondary" className="text-lg font-semibold">
-                                  ${item.price}
-                                </Badge>
-                              </div>
-                              <Button onClick={() => addToOrder(item)} className="w-full" size="sm">
-                                <Plus className="h-4 w-4 mr-2" />
-                                Agregar al Pedido
-                              </Button>
-                            </CardContent>
-                          </Card>
-                        ))}
+                                
+                                {quantity === 0 ? (
+                                  <Button onClick={() => addToOrder(item)} className="w-full" size="sm">
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Agregar al Pedido
+                                  </Button>
+                                ) : (
+                                  <div className="flex items-center justify-between bg-orange-50 p-2 rounded-lg">
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      onClick={() => removeFromOrder(item.id)}
+                                      className="h-8 w-8 p-0"
+                                    >
+                                      <Minus className="h-4 w-4" />
+                                    </Button>
+                                    <div className="text-center">
+                                      <p className="text-sm font-medium text-orange-800">Cantidad: {quantity}</p>
+                                      <p className="text-xs text-orange-600">Subtotal: ${item.price * quantity}</p>
+                                    </div>
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      onClick={() => addToOrder(item)}
+                                      className="h-8 w-8 p-0"
+                                    >
+                                      <Plus className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                )}
+                              </CardContent>
+                            </Card>
+                          )
+                        })}
                       </div>
                     )}
                   </CardContent>

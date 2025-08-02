@@ -20,39 +20,11 @@ async function main() {
   })
   console.log('✅ Usuario administrador creado:', admin.name)
 
-  // Crear meseros de ejemplo
-  const waiters = await Promise.all([
-    prisma.user.create({
-      data: {
-        name: 'Juan Pérez',
-        role: 'WAITER',
-        status: 'ACTIVE',
-      },
-    }),
-    prisma.user.create({
-      data: {
-        name: 'María González',
-        role: 'WAITER',
-        status: 'ACTIVE',
-      },
-    }),
-    prisma.user.create({
-      data: {
-        name: 'Carlos Rodríguez',
-        role: 'WAITER',
-        status: 'ACTIVE',
-      },
-    }),
-  ])
-  console.log('✅ Meseros creados:', waiters.map(w => w.name).join(', '))
-
+ 
   // Crear categorías y menú usando la función actualizada
   const { categories, menuItemsCount } = await seedMenuData()
   console.log('✅ Categorías creadas:', categories.map(c => c.name).join(', '))
   console.log('✅ Items del menú creados:', menuItemsCount)
-
-  // Obtener los items del menú creados para poder referenciarlos
-  const allMenuItems = await prisma.menuItem.findMany()
 
   // Crear mesas
   const tables = []
@@ -68,46 +40,6 @@ async function main() {
     tables.push(table)
   }
   console.log('✅ Mesas creadas:', tables.length)
-
-  // Crear algunas órdenes de ejemplo
-  const orderTotal = allMenuItems[0].price + (allMenuItems[1].price * 2) + allMenuItems[2].price
-  const orderSubtotal = orderTotal
-  const orderFinalTotal = orderSubtotal // Sin impuestos
-
-  const sampleOrder = await prisma.order.create({
-    data: {
-      tableId: tables[0].id,
-      waiterId: waiters[0].id,
-      status: 'COMPLETED',
-      subtotal: orderSubtotal,
-      tax: 0, // Sin impuestos
-      total: orderFinalTotal,
-      completedAt: new Date(),
-      items: {
-        create: [
-          {
-            menuItemId: allMenuItems[0].id, // Primer item del menú
-            quantity: 1,
-            unitPrice: allMenuItems[0].price,
-            totalPrice: allMenuItems[0].price,
-          },
-          {
-            menuItemId: allMenuItems[1].id, // Segundo item del menú
-            quantity: 2,
-            unitPrice: allMenuItems[1].price,
-            totalPrice: allMenuItems[1].price * 2,
-          },
-          {
-            menuItemId: allMenuItems[2].id, // Tercer item del menú
-            quantity: 1,
-            unitPrice: allMenuItems[2].price,
-            totalPrice: allMenuItems[2].price,
-          },
-        ],
-      },
-    },
-  })
-  console.log('✅ Orden de ejemplo creada:', sampleOrder.id)
 
   // Crear items de inventario
   const inventoryItems = [
