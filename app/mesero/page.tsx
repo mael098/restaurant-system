@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback, memo } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Minus, LogOut, Calculator, Search, History, ShoppingCart, Edit, Clock, Check, CheckCircle } from "lucide-react"
 
@@ -13,6 +13,74 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { getAuthSession, clearAuthSession } from "@/lib/auth/cookies"
+
+// Componente memoizado para items del menú - Optimiza re-renders
+const MenuItemCard = memo(({ 
+  item, 
+  quantity, 
+  onAdd, 
+  onRemove 
+}: { 
+  item: MenuItem
+  quantity: number
+  onAdd: (item: MenuItem) => void
+  onRemove: (id: string) => void
+}) => (
+  <Card className="hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border-orange-100 bg-gradient-to-br from-white to-orange-50/20">
+    <CardContent className="p-3 sm:p-4">
+      <div className="flex justify-between items-start mb-2">
+        <div className="flex-1 mr-2" style={{ contain: 'layout' }}>
+          <h3 className="font-semibold text-sm sm:text-base line-clamp-1 text-gray-900">{item.name}</h3>
+          <p className="text-xs text-orange-600 font-medium">{item.category.name}</p>
+          {item.description && (
+            <p className="text-xs text-gray-500 mt-1 line-clamp-2 hidden sm:block" style={{ minHeight: '2.5rem', contain: 'layout' }}>
+              {item.description}
+            </p>
+          )}
+        </div>
+        <Badge className="text-sm sm:text-base font-bold shrink-0 bg-gradient-to-r from-green-500 to-emerald-500 text-white">
+          ${Number(item.price).toFixed(2)}
+        </Badge>
+      </div>
+      
+      {quantity === 0 ? (
+        <Button 
+          onClick={() => onAdd(item)} 
+          className="w-full text-xs sm:text-sm bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 shadow-md hover:shadow-lg transition-all duration-300" 
+          size="sm"
+        >
+          <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+          Agregar
+        </Button>
+      ) : (
+        <div className="flex items-center justify-between bg-orange-50 p-1.5 sm:p-2 rounded-lg">
+          <Button 
+            size="sm" 
+            variant="outline" 
+            onClick={() => onRemove(item.id)}
+            className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+          >
+            <Minus className="h-3 w-3 sm:h-4 sm:w-4" />
+          </Button>
+          <div className="text-center px-1">
+            <p className="text-xs sm:text-sm font-medium text-orange-800">Cant: {quantity}</p>
+            <p className="text-xs text-orange-600">${(Number(item.price) * quantity).toFixed(2)}</p>
+          </div>
+          <Button 
+            size="sm" 
+            variant="outline"
+            onClick={() => onAdd(item)}
+            className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+          >
+            <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
+          </Button>
+        </div>
+      )}
+    </CardContent>
+  </Card>
+))
+
+MenuItemCard.displayName = 'MenuItemCard'
 
 interface Order {
   id: string
@@ -91,7 +159,11 @@ export default function MeseroPage() {
   const [activeTab, setActiveTab] = useState("new-order")
   const router = useRouter()
 
-  const categories = ["Todos", ...Array.from(new Set(menuItems.map((item) => item.category.name)))]
+  // Memoizar categories para evitar recalcular en cada render
+  const categories = useMemo(() => 
+    ["Todos", ...Array.from(new Set(menuItems.map((item) => item.category.name)))],
+    [menuItems]
+  )
 
   useEffect(() => {
     // Verificar autenticación desde cookies
@@ -115,15 +187,17 @@ export default function MeseroPage() {
 
   const loadData = async () => {
     try {
-      // Cargar menú
-      const menuResponse = await fetch('/api/menu')
+      // Cargar menú y mesas en paralelo para mejorar LCP
+      const [menuResponse, tablesResponse] = await Promise.all([
+        fetch('/api/menu', { priority: 'high' } as any),
+        fetch('/api/tables', { priority: 'high' } as any)
+      ])
+
       if (menuResponse.ok) {
         const menuData = await menuResponse.json()
         setMenuItems(menuData)
       }
 
-      // Cargar mesas
-      const tablesResponse = await fetch('/api/tables')
       if (tablesResponse.ok) {
         const tablesData = await tablesResponse.json()
         setTables(tablesData)
@@ -173,16 +247,20 @@ export default function MeseroPage() {
     router.push("/")
   }
 
-  const filteredItems = menuItems.filter((item) => {
-    const matchesCategory = selectedCategory === "Todos" || item.category.name === selectedCategory
-    const matchesSearch = searchTerm === "" ||
-      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase()));
+  // Memoizar filteredItems para evitar filtrado en cada render
+  const filteredItems = useMemo(() => {
+    return menuItems.filter((item) => {
+      const matchesCategory = selectedCategory === "Todos" || item.category.name === selectedCategory
+      const matchesSearch = searchTerm === "" ||
+        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    return matchesCategory && matchesSearch
-  })
+      return matchesCategory && matchesSearch
+    })
+  }, [menuItems, selectedCategory, searchTerm])
 
-  const addToOrder = (item: MenuItem) => {
+  // Memoizar funciones con useCallback
+  const addToOrder = useCallback((item: MenuItem) => {
     setOrderItems((prev) => {
       const existing = prev.find((orderItem) => orderItem.menuItemId === item.id)
       if (existing) {
@@ -199,9 +277,9 @@ export default function MeseroPage() {
         quantity: 1
       }]
     })
-  }
+  }, [])
 
-  const removeFromOrder = (menuItemId: string) => {
+  const removeFromOrder = useCallback((menuItemId: string) => {
     setOrderItems((prev) => {
       const existing = prev.find((item) => item.menuItemId === menuItemId)
       if (existing && existing.quantity > 1) {
@@ -213,11 +291,12 @@ export default function MeseroPage() {
       }
       return prev.filter((item) => item.menuItemId !== menuItemId)
     })
-  }
+  }, [])
 
-  const getTotalPrice = () => {
-    return orderItems.reduce((total, item) => total + item.price * item.quantity, 0)
-  }
+  // Memoizar cálculo del total
+  const totalPrice = useMemo(() => {
+    return orderItems.reduce((total, item) => total + Number(item.price) * item.quantity, 0)
+  }, [orderItems])
 
   const saveOrder = async () => {
     if (!selectedTable || orderItems.length === 0 || !userSession) {
@@ -393,78 +472,164 @@ export default function MeseroPage() {
     }
   }
 
+  // Skeleton Loader optimizado para prevenir CLS
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
-          <p>Cargando...</p>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-orange-50/30 to-amber-50/30 p-2 sm:p-4">
+        <div className="max-w-7xl mx-auto">
+          {/* Header skeleton */}
+          <div className="glass rounded-2xl shadow-xl p-4 sm:p-6 mb-4 sm:mb-6 border border-orange-100 animate-pulse">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-orange-200 rounded-xl"></div>
+                <div className="space-y-2">
+                  <div className="h-6 w-48 bg-orange-200 rounded"></div>
+                  <div className="h-4 w-32 bg-orange-100 rounded"></div>
+                </div>
+              </div>
+              <div className="h-9 w-24 bg-orange-100 rounded"></div>
+            </div>
+          </div>
+          
+          {/* Tabs skeleton */}
+          <div className="space-y-4">
+            <div className="flex gap-2 mb-4">
+              <div className="h-10 w-32 bg-white rounded-lg"></div>
+              <div className="h-10 w-32 bg-white rounded-lg"></div>
+            </div>
+            
+            {/* Cards skeleton */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2 space-y-4">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="bg-white rounded-lg p-4 animate-pulse">
+                    <div className="flex justify-between mb-2">
+                      <div className="space-y-2 flex-1">
+                        <div className="h-5 bg-gray-200 rounded w-3/4"></div>
+                        <div className="h-3 bg-gray-100 rounded w-1/2"></div>
+                        <div className="h-3 bg-gray-100 rounded w-full" style={{ minHeight: '2.5rem' }}></div>
+                      </div>
+                      <div className="h-6 w-16 bg-green-100 rounded"></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-white rounded-lg p-4 h-96 animate-pulse">
+                <div className="h-6 bg-gray-200 rounded mb-4"></div>
+                <div className="space-y-2">
+                  <div className="h-4 bg-gray-100 rounded"></div>
+                  <div className="h-4 bg-gray-100 rounded"></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-orange-50/30 to-amber-50/30 p-2 sm:p-4">
       <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Sistema de Pedidos</h1>
-            <p className="text-gray-600">Bienvenido, {userSession?.user.name}</p>
+        {/* Header mejorado */}
+        <div className="glass rounded-2xl shadow-xl p-4 sm:p-6 mb-4 sm:mb-6 border border-orange-100">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 sm:p-3 bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl shadow-lg">
+                <ShoppingCart className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
+                  Sistema de Pedidos
+                </h1>
+                <p className="text-xs sm:text-sm text-gray-600 flex items-center gap-2">
+                  <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                  👋 Bienvenido, <span className="font-semibold text-orange-600">{userSession?.user.name}</span>
+                </p>
+              </div>
+            </div>
+            <Button 
+              variant="outline" 
+              onClick={handleLogout} 
+              className="gap-2 border-red-200 hover:bg-red-50 hover:border-red-300 text-xs sm:text-sm transition-all duration-300"
+            >
+              <LogOut className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Cerrar Sesión</span>
+              <span className="sm:hidden">Salir</span>
+            </Button>
           </div>
-          <Button variant="outline" onClick={handleLogout} className="gap-2 bg-transparent">
-            <LogOut className="h-4 w-4" />
-            Cerrar Sesión
-          </Button>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="new-order" className="flex items-center gap-2">
-              <ShoppingCart className="h-4 w-4" />
-              {editingOrder ? "Agregar Items" : "Nuevo Pedido"}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
+          <TabsList className="grid w-full grid-cols-2 bg-white/80 backdrop-blur-sm p-1.5 rounded-xl shadow-lg border border-orange-100">
+            <TabsTrigger 
+              value="new-order" 
+              className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-amber-500 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300"
+            >
+              <ShoppingCart className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">{editingOrder ? "Agregar Items" : "Nuevo Pedido"}</span>
+              <span className="sm:hidden">Pedido</span>
             </TabsTrigger>
-            <TabsTrigger value="my-orders" className="flex items-center gap-2">
-              <History className="h-4 w-4" />
-              Mis Pedidos
+            <TabsTrigger 
+              value="my-orders" 
+              className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm py-2.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-amber-500 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300"
+            >
+              <History className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Mis Pedidos</span>
+              <span className="sm:hidden">Historial</span>
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="new-order" className="space-y-6">
             {editingOrder && (
-              <Card className="border-orange-200 bg-orange-50">
-                <CardHeader>
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <CardTitle className="text-orange-800">Editando Pedido</CardTitle>
-                      <CardDescription className="text-orange-600">
-                        Mesa {editingOrder.table.number} - Agregando nuevos items
-                      </CardDescription>
+              <Card className="border-orange-300 bg-gradient-to-r from-orange-50 to-amber-50 shadow-lg">
+                <CardHeader className="pb-3">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 bg-orange-500 rounded-lg">
+                        <Edit className="h-4 w-4 text-white" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-orange-800 text-base sm:text-lg flex items-center gap-2">
+                          Editando Pedido
+                          <Badge className="bg-orange-600 text-white">Mesa {editingOrder.table.number}</Badge>
+                        </CardTitle>
+                        <CardDescription className="text-orange-600 text-xs sm:text-sm">
+                          Agregando nuevos items al pedido
+                        </CardDescription>
+                      </div>
                     </div>
-                    <Button variant="outline" onClick={cancelEdit} size="sm">
-                      Cancelar Edición
+                    <Button 
+                      variant="outline" 
+                      onClick={cancelEdit} 
+                      size="sm" 
+                      className="text-xs sm:text-sm w-full sm:w-auto border-orange-300 hover:bg-orange-100"
+                    >
+                      ✕ Cancelar
                     </Button>
                   </div>
                 </CardHeader>
               </Card>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
               {/* Información del pedido */}
-              <div className="lg:col-span-1">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Calculator className="h-5 w-5" />
+              <div className="lg:col-span-1 order-2 lg:order-1">
+                <Card className="lg:sticky lg:top-2 border-orange-100 shadow-lg bg-gradient-to-br from-white to-orange-50/30">
+                  <CardHeader className="pb-3 bg-gradient-to-r from-orange-50 to-amber-50 border-b border-orange-100">
+                    <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                      <div className="p-1.5 bg-gradient-to-br from-orange-500 to-amber-500 rounded-lg">
+                        <Calculator className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                      </div>
                       {editingOrder ? "Nuevos Items" : "Pedido Actual"}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent className="space-y-3 sm:space-y-4">
                     {!editingOrder && (
                       <div>
-                        <Label htmlFor="mesa">Mesa</Label>
+                        <Label htmlFor="mesa" className="text-sm">Mesa</Label>
                         <Select value={selectedTable} onValueChange={setSelectedTable}>
-                          <SelectTrigger>
+                          <SelectTrigger className="text-xs sm:text-sm h-9">
                             <SelectValue placeholder="Selecciona una mesa" />
                           </SelectTrigger>
                           <SelectContent>
@@ -488,33 +653,33 @@ export default function MeseroPage() {
                     )}
 
                     {/* Resumen del pedido */}
-                    <div className="mt-6">
-                      <h3 className="font-semibold mb-3">
+                    <div className="mt-4 sm:mt-6">
+                      <h3 className="font-semibold mb-2 sm:mb-3 text-sm sm:text-base">
                         {editingOrder ? "Items a Agregar" : "Items del Pedido"}
                       </h3>
                       {orderItems.length === 0 ? (
-                        <p className="text-gray-500 text-sm">
-                          {editingOrder ? "No hay items nuevos para agregar" : "No hay items en el pedido"}
+                        <p className="text-gray-500 text-xs sm:text-sm">
+                          {editingOrder ? "No hay items nuevos" : "No hay items"}
                         </p>
                       ) : (
-                        <div className="space-y-2">
+                        <div className="space-y-1.5 sm:space-y-2">
                           {orderItems.map((item) => (
-                            <div key={item.menuItemId} className="flex justify-between items-center text-sm">
-                              <span>
+                            <div key={item.menuItemId} className="flex justify-between items-center text-xs sm:text-sm gap-2">
+                              <span className="line-clamp-1 flex-1">
                                 {item.name} x{item.quantity}
                               </span>
-                              <div className="flex items-center gap-2">
-                                <span>${item.price * item.quantity}</span>
-                                <Button size="sm" variant="outline" onClick={() => removeFromOrder(item.menuItemId)}>
+                              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                                <span className="font-medium">${(Number(item.price) * item.quantity).toFixed(2)}</span>
+                                <Button size="sm" variant="outline" onClick={() => removeFromOrder(item.menuItemId)} className="h-6 w-6 sm:h-7 sm:w-7 p-0">
                                   <Minus className="h-3 w-3" />
                                 </Button>
                               </div>
                             </div>
                           ))}
-                          <Separator />
-                          <div className="flex justify-between font-semibold text-lg">
-                            <span>{editingOrder ? "Subtotal adicional:" : "Total:"}</span>
-                            <span className="text-green-600">${getTotalPrice()}</span>
+                          <Separator className="my-2" />
+                          <div className="flex justify-between font-semibold text-sm sm:text-base">
+                            <span className="text-xs sm:text-sm">{editingOrder ? "Subtotal:" : "Total:"}</span>
+                            <span className="text-green-600">${totalPrice.toFixed(2)}</span>
                           </div>
                         </div>
                       )}
@@ -522,47 +687,62 @@ export default function MeseroPage() {
 
                     <Button
                       onClick={saveOrder}
-                      className="w-full mt-4"
+                      className="w-full mt-3 sm:mt-4 text-xs sm:text-sm bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 shadow-lg hover:shadow-xl transition-all duration-300"
                       disabled={!selectedTable || orderItems.length === 0 || submitting}
                       size="lg"
                     >
-                      <Calculator className="h-4 w-4 mr-2" />
-                      {submitting
-                        ? "Guardando..."
-                        : editingOrder
-                          ? "Agregar Items al Pedido"
-                          : "Guardar Pedido"
-                      }
+                      {submitting ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Guardando...
+                        </>
+                      ) : (
+                        <>
+                          <Calculator className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
+                          {editingOrder ? "✓ Agregar Items" : "✓ Guardar Pedido"}
+                        </>
+                      )}
                     </Button>
                   </CardContent>
                 </Card>
               </div>
 
               {/* Menú */}
-              <div className="lg:col-span-2">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Menú del Restaurante</CardTitle>
-                    <CardDescription>Selecciona los items para agregar al pedido</CardDescription>
+              <div className="lg:col-span-2 order-1 lg:order-2">
+                <Card className="border-orange-100 shadow-lg bg-white/90 backdrop-blur-sm">
+                  <CardHeader className="pb-3 sm:pb-6 bg-gradient-to-r from-orange-50 to-amber-50 border-b border-orange-100">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 bg-gradient-to-br from-orange-500 to-amber-500 rounded-lg">
+                        <ShoppingCart className="h-4 w-4 text-white" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-base sm:text-lg">Menú del Restaurante</CardTitle>
+                        <CardDescription className="text-xs sm:text-sm">Selecciona los items para agregar al pedido</CardDescription>
+                      </div>
+                    </div>
 
-                    {/* Buscador */}
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    {/* Buscador mejorado */}
+                    <div className="relative mt-3">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-orange-400 h-3 w-3 sm:h-4 sm:w-4" />
                       <Input
-                        placeholder="Buscar platillos, bebidas, etc..."
+                        placeholder="🔍 Buscar platillos, bebidas..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10"
+                        className="pl-8 sm:pl-10 text-xs sm:text-sm border-orange-200 focus:border-orange-500 focus:ring-orange-500"
                       />
                     </div>
 
-                    {/* Filtros por categoría */}
-                    <div className="flex gap-2 flex-wrap">
+                    {/* Filtros por categoría mejorados */}
+                    <div className="flex gap-1.5 sm:gap-2 flex-wrap mt-3">
                       {categories.map((category) => (
                         <Badge
                           key={category}
                           variant={selectedCategory === category ? "default" : "outline"}
-                          className="cursor-pointer"
+                          className={`cursor-pointer text-xs px-3 py-1 transition-all duration-300 ${
+                            selectedCategory === category 
+                              ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md hover:shadow-lg" 
+                              : "border-orange-300 hover:bg-orange-50"
+                          }`}
                           onClick={() => setSelectedCategory(category)}
                         >
                           {category}
@@ -597,58 +777,19 @@ export default function MeseroPage() {
                         )}
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         {filteredItems.map((item) => {
                           const orderItem = orderItems.find(orderItem => orderItem.menuItemId === item.id)
                           const quantity = orderItem ? orderItem.quantity : 0
                           
                           return (
-                            <Card key={item.id} className="hover:shadow-md transition-shadow">
-                              <CardContent className="p-4">
-                                <div className="flex justify-between items-start mb-2">
-                                  <div>
-                                    <h3 className="font-semibold">{item.name}</h3>
-                                    <p className="text-sm text-gray-600">{item.category.name}</p>
-                                    {item.description && (
-                                      <p className="text-xs text-gray-500 mt-1">{item.description}</p>
-                                    )}
-                                  </div>
-                                  <Badge variant="secondary" className="text-lg font-semibold">
-                                    ${item.price}
-                                  </Badge>
-                                </div>
-                                
-                                {quantity === 0 ? (
-                                  <Button onClick={() => addToOrder(item)} className="w-full" size="sm">
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Agregar al Pedido
-                                  </Button>
-                                ) : (
-                                  <div className="flex items-center justify-between bg-orange-50 p-2 rounded-lg">
-                                    <Button 
-                                      size="sm" 
-                                      variant="outline" 
-                                      onClick={() => removeFromOrder(item.id)}
-                                      className="h-8 w-8 p-0"
-                                    >
-                                      <Minus className="h-4 w-4" />
-                                    </Button>
-                                    <div className="text-center">
-                                      <p className="text-sm font-medium text-orange-800">Cantidad: {quantity}</p>
-                                      <p className="text-xs text-orange-600">Subtotal: ${item.price * quantity}</p>
-                                    </div>
-                                    <Button 
-                                      size="sm" 
-                                      variant="outline" 
-                                      onClick={() => addToOrder(item)}
-                                      className="h-8 w-8 p-0"
-                                    >
-                                      <Plus className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                )}
-                              </CardContent>
-                            </Card>
+                            <MenuItemCard
+                              key={item.id}
+                              item={item}
+                              quantity={quantity}
+                              onAdd={addToOrder}
+                              onRemove={removeFromOrder}
+                            />
                           )
                         })}
                       </div>
@@ -659,19 +800,19 @@ export default function MeseroPage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="my-orders" className="space-y-6">
+          <TabsContent value="my-orders" className="space-y-4 sm:space-y-6">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <History className="h-5 w-5" />
+                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                    <History className="h-4 w-4 sm:h-5 sm:w-5" />
                     Mi Historial de Pedidos
                   </CardTitle>
-                  <CardDescription>
+                  <CardDescription className="text-xs sm:text-sm">
                     Tus pedidos realizados recientemente
                   </CardDescription>
                 </div>
-                <Button onClick={loadMyOrders} variant="outline" size="sm">
+                <Button onClick={loadMyOrders} variant="outline" size="sm" className="text-xs sm:text-sm">
                   Actualizar
                 </Button>
               </CardHeader>
@@ -686,14 +827,14 @@ export default function MeseroPage() {
                     <p className="text-gray-500">No tienes pedidos registrados aún</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-3 sm:space-y-4">
                     {myOrders.map((order) => (
                       <Card key={order.id} className="border-l-4 border-l-orange-500">
-                        <CardContent className="p-4">
-                          <div className="flex justify-between items-start mb-3">
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <h3 className="font-semibold">Mesa {order.table.number}</h3>
+                        <CardContent className="p-3 sm:p-4">
+                          <div className="flex flex-col sm:flex-row justify-between items-start gap-3 mb-3">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                <h3 className="font-semibold text-sm sm:text-base">Mesa {order.table.number}</h3>
                                 <Badge
                                   variant={
                                     order.status === 'PENDING' ? 'destructive' :
@@ -701,6 +842,7 @@ export default function MeseroPage() {
                                         order.status === 'READY' ? 'secondary' :
                                           'outline'
                                   }
+                                  className="text-xs"
                                 >
                                   {order.status === 'PENDING' ? 'Pendiente' :
                                     order.status === 'PREPARING' ? 'Preparando' :
@@ -709,7 +851,7 @@ export default function MeseroPage() {
                                           'Completado'}
                                 </Badge>
                               </div>
-                              <p className="text-sm text-gray-600">
+                              <p className="text-xs text-gray-600">
                                 {new Date(order.createdAt).toLocaleDateString('es-ES', {
                                   day: '2-digit',
                                   month: '2-digit',
@@ -719,17 +861,18 @@ export default function MeseroPage() {
                                 })}
                               </p>
                             </div>
-                            <div className="text-right">
-                              <p className="text-lg font-semibold text-green-600">${order.total}</p>
-                              <div className="flex flex-col gap-1 mt-1">
+                            <div className="text-right sm:text-left flex sm:flex-col items-center sm:items-end gap-2">
+                              <p className="text-base sm:text-lg font-semibold text-green-600">${order.total}</p>
+                              <div className="flex flex-row sm:flex-col gap-1 sm:gap-1.5">
                                 {order.status === 'PENDING' && (
                                   <Button
                                     size="sm"
                                     variant="outline"
                                     onClick={() => startEditingOrder(order)}
+                                    className="text-xs px-2 h-7 sm:h-8"
                                   >
-                                    <Edit className="h-3 w-3 mr-1" />
-                                    Agregar Items
+                                    <Edit className="h-3 w-3 sm:mr-1" />
+                                    <span className="hidden sm:inline ml-1">Agregar Items</span>
                                   </Button>
                                 )}
                                 {getNextStatus(order.status) && (
@@ -737,7 +880,7 @@ export default function MeseroPage() {
                                     size="sm"
                                     variant={getNextStatus(order.status) === 'COMPLETED' ? 'default' : 'outline'}
                                     onClick={() => updateOrderStatus(order.id, getNextStatus(order.status)!)}
-                                    className={getNextStatus(order.status) === 'COMPLETED' ? 'bg-green-600 hover:bg-green-700 text-white' : ''}
+                                    className={`text-xs px-2 h-7 sm:h-8 ${getNextStatus(order.status) === 'COMPLETED' ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
                                   >
                                     {getStatusIcon(order.status)}
                                     <span className="ml-1">
@@ -750,22 +893,22 @@ export default function MeseroPage() {
                           </div>
 
                           <div className="space-y-1">
-                            <p className="text-sm font-medium text-gray-700">Items:</p>
+                            <p className="text-xs sm:text-sm font-medium text-gray-700">Items:</p>
                             {order.items.map((item) => (
-                              <div key={item.id} className="flex justify-between text-sm text-gray-600">
-                                <span>{item.menuItem.name} x{item.quantity}</span>
-                                <span>${item.totalPrice}</span>
+                              <div key={item.id} className="flex justify-between text-xs text-gray-600">
+                                <span className="line-clamp-1">{item.menuItem.name} x{item.quantity}</span>
+                                <span className="shrink-0 ml-2">${item.totalPrice}</span>
                               </div>
                             ))}
                           </div>
 
                           <Separator className="my-2" />
-                          <div className="flex justify-between text-sm">
+                          <div className="flex justify-between text-xs sm:text-sm">
                             <span>Subtotal:</span>
                             <span>${order.subtotal}</span>
                           </div>
                           {order.tip && (
-                            <div className="flex justify-between text-sm">
+                            <div className="flex justify-between text-xs sm:text-sm">
                               <span>Propina:</span>
                               <span>${order.tip}</span>
                             </div>
